@@ -322,17 +322,46 @@ class Game:
         """Validate a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
         if not self.is_valid_coord(coords.src) or not self.is_valid_coord(coords.dst):
             return False
-        unit = self.get(coords.src)
-        if unit is None or unit.player != self.next_player:
+        src_unit = self.get(coords.src)
+        if src_unit is None or src_unit.player != self.next_player:
             return False
-        unit = self.get(coords.dst)
-        return (unit is None)
+
+        if coords.src != coords.dst:
+            for coord in coords.src.iter_adjacent():
+                if coord == coords.dst:
+                    return True
+            return False
+        else:
+            return True
+            print("hello")
 
     def perform_move(self, coords: CoordPair) -> Tuple[bool, str]:
         """Validate and perform a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
         if self.is_valid_move(coords):
-            self.set(coords.dst, self.get(coords.src))
-            self.set(coords.src, None)
+            if coords.src != coords.dst:
+                src_unit = self.get(coords.src)
+                dst_unit = self.get(coords.dst)
+                if dst_unit is None:
+                    self.set(coords.dst, self.get(coords.src))
+                    self.set(coords.src, None)
+                else:
+                    if src_unit.player == dst_unit.player:
+                        repair = src_unit.repair_table[src_unit.value][dst_unit.type.value]
+                        damage = repair * -1
+                        self.mod_health(coords.src, damage)
+                        self.mod_health(coords.dst, repair)
+                    else:
+                        damage = src_unit.damage_table[src_unit.type.value][dst_unit.type.value] * -1
+
+                        self.mod_health(coords.src, damage)
+                        self.mod_health(coords.dst, damage)
+
+
+            else:
+                self.set(coords.src, None)
+                # Loop through all elements in the rectangular area of coords.src
+                for coord in coords.src.iter_range(1):
+                    self.mod_health(coord, -2);
             return (True, "")
         return (False, "invalid move")
 
