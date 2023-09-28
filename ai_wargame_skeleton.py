@@ -344,12 +344,12 @@ class Game:
         # firewall and program move restrictions
         if src_unit.player == Player.Attacker:
             if src_unit.type in [UnitType.AI, UnitType.Firewall, UnitType.Program]:
-                if drow > 0 or dcol < 0:
+                if drow > 0 or dcol > 0:
                     return False
             
         else:  
             if src_unit.type in [UnitType.AI, UnitType.Firewall, UnitType.Program]:
-                if drow < 0 or dcol > 0:
+                if drow < 0 or dcol < 0:
                     return False
         return True
 
