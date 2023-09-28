@@ -319,14 +319,39 @@ class Game:
             self.remove_dead(coord)
 
     def is_valid_move(self, coords: CoordPair) -> bool:
-        """Validate a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
+        """validates moves (pretty self explanatory)"""
+        
+        # coordinate validation
         if not self.is_valid_coord(coords.src) or not self.is_valid_coord(coords.dst):
             return False
-        unit = self.get(coords.src)
-        if unit is None or unit.player != self.next_player:
+
+        # player turn check
+        src_unit = self.get(coords.src)
+        if src_unit is None or src_unit.player != self.next_player:
             return False
-        unit = self.get(coords.dst)
-        return (unit is None)
+
+        # Cell occupancy check
+        dst_unit = self.get(coords.dst)
+        if dst_unit is not None:
+            return False
+
+        # adjacent position check
+        drow = coords.dst.row - coords.src.row
+        dcol = coords.dst.col - coords.src.col
+        if abs(drow) > 1 or abs(dcol) > 1 or (abs(drow) == 1 and abs(dcol) == 1):
+            return False
+
+        # firewall and program move restrictions
+        if src_unit.player == Player.Attacker:
+            if src_unit.type in [UnitType.AI, UnitType.Firewall, UnitType.Program]:
+                if drow > 0 or dcol < 0:
+                    return False
+            
+        else:  
+            if src_unit.type in [UnitType.AI, UnitType.Firewall, UnitType.Program]:
+                if drow < 0 or dcol > 0:
+                    return False
+        return True
 
     def perform_move(self, coords: CoordPair) -> Tuple[bool, str]:
         """Validate and perform a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
