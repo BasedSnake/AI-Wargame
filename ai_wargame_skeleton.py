@@ -327,13 +327,32 @@ class Game:
             return False
 
         if coords.src != coords.dst:
+            # adjacent position check
+            drow = coords.dst.row - coords.src.row
+            dcol = coords.dst.col - coords.src.col
+            if abs(drow) > 1 or abs(dcol) > 1 or (abs(drow) == 1 and abs(dcol) == 1):
+                return False
+
+            # firewall and program move restrictions
+            if src_unit.player == Player.Attacker:
+                if src_unit.type in [UnitType.AI, UnitType.Firewall, UnitType.Program]:
+                    if drow > 0 or dcol > 0:
+                        return False
+
+            else:
+                if src_unit.type in [UnitType.AI, UnitType.Firewall, UnitType.Program]:
+                    if drow < 0 or dcol < 0:
+                        return False
             for coord in coords.src.iter_adjacent():
                 if coord == coords.dst:
+                    for coord2 in coords.src.iter_adjacent():
+                        if self.get(coord2) is not None:
+                            if src_unit.player != self.get(coord2).player:
+                                return False
                     return True
             return False
         else:
             return True
-            print("hello")
 
     def perform_move(self, coords: CoordPair) -> Tuple[bool, str]:
         """Validate and perform a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
@@ -355,10 +374,9 @@ class Game:
 
                         self.mod_health(coords.src, damage)
                         self.mod_health(coords.dst, damage)
-
-
             else:
-                self.set(coords.src, None)
+                self.mod_health(coords.src,-9)
+
                 # Loop through all elements in the rectangular area of coords.src
                 for coord in coords.src.iter_range(1):
                     self.mod_health(coord, -2);
