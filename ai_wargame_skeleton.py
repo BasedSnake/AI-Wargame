@@ -229,10 +229,11 @@ class Options:
     min_depth: int | None = 2
     max_time: float | None = 5.0
     game_type: GameType = GameType.AttackerVsDefender
-    alpha_beta: bool = True
+    alpha_beta: bool = False
     max_turns: int | None = 100
     randomize_moves: bool = True
     broker: str | None = None
+    file = 'gametrace-'+ str(alpha_beta) +'-'+str(max_time)+'-'+str(max_turns)+'.txt'
 
 
 ##############################################################################################################
@@ -347,7 +348,8 @@ class Game:
                 if coord == coords.dst:
                     for coord2 in coords.src.iter_adjacent():
                         if self.get(coord2) is not None:
-                            if src_unit.player != self.get(coord2).player:
+                            if src_unit.type in [UnitType.AI, UnitType.Firewall, UnitType.Program] \
+                                    and src_unit.player != self.get(coord2).player:
                                 return False
                     return True
             return False
@@ -379,7 +381,7 @@ class Game:
 
                 # Loop through all elements in the rectangular area of coords.src
                 for coord in coords.src.iter_range(1):
-                    self.mod_health(coord, -2);
+                    self.mod_health(coord, -2)
             return (True, "")
         return (False, "invalid move")
 
@@ -434,7 +436,10 @@ class Game:
             if coords is not None and self.is_valid_coord(coords.src) and self.is_valid_coord(coords.dst):
                 return coords
             else:
+                f = open(Options.file, "a")
+                f.write('Invalid coordinates! Try again.\n')
                 print('Invalid coordinates! Try again.')
+                f.close()
 
     def human_turn(self):
         """Human player plays a move (or get via broker)."""
@@ -453,14 +458,18 @@ class Game:
         else:
             while True:
                 mv = self.read_move()
-                (success, result) = self.perform_move(mv)
+                f = open(Options.file, "a")
+                f.write(str(self.next_player.name) + ' move '+str(mv) + '\n')
+                (success,result) = self.perform_move(mv)
                 if success:
-                    print(f"Player {self.next_player.name}: ", end='')
+                    print(f"Player {self.next_player.name}: ",end='')
                     print(result)
                     self.next_turn()
                     break
                 else:
                     print("The move is not valid! Try again.")
+                    f.write("The move is not valid! Try again.\n")
+                    f.close()
 
     def computer_turn(self) -> CoordPair | None:
         """Computer plays a move."""
@@ -623,12 +632,24 @@ def main():
     game = Game(options=options)
 
     # the main game loop
+    
+    f = open(Options.file, "w")
+    f.write(str(options.max_turns) + ' turns \n')
+    f.write(str(options.game_type) + '\n')
+    f.write("alpha-beta is " + str(options.alpha_beta)+ "\n")
     while True:
         print()
         print(game)
+        
+        f = open(Options.file, "a")
+        f.write(str(game))   
+        f.close() 
         winner = game.has_winner()
         if winner is not None:
             print(f"{winner.name} wins!")
+            f = open(Options.file, "a")
+            f.write(f"{winner.name} wins in " + str(game.turns_played) + " turns")  
+            f.close()
             break
         if game.options.game_type == GameType.AttackerVsDefender:
             game.human_turn()
