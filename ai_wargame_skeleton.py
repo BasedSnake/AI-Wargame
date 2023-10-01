@@ -23,6 +23,13 @@ class UnitType(Enum):
     Firewall = 4
 
 
+class ActionType(Enum):
+    MOVE = 0
+    ATTACK = 1
+    REPAIR = 2
+    SUICIDE = 3
+
+
 class Player(Enum):
     """The 2 players."""
     Attacker = 0
@@ -229,10 +236,11 @@ class Options:
     min_depth: int | None = 2
     max_time: float | None = 5.0
     game_type: GameType = GameType.AttackerVsDefender
-    alpha_beta: bool = True
+    alpha_beta: bool = False
     max_turns: int | None = 100
     randomize_moves: bool = True
     broker: str | None = None
+    file = 'gametrace-' + str(alpha_beta) + '-' + str(max_time) + '-' + str(max_turns) + '.txt'
 
 
 ##############################################################################################################
@@ -322,18 +330,39 @@ class Game:
         """Validate a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
         if not self.is_valid_coord(coords.src) or not self.is_valid_coord(coords.dst):
             return False
-        unit = self.get(coords.src)
-        if unit is None or unit.player != self.next_player:
+
+        src_unit = self.get(coords.src)
+        if src_unit is None or src_unit.player != self.next_player:
             return False
-        unit = self.get(coords.dst)
-        return (unit is None)
+
+        if coords.src != coords.dst:
+            for coord in coords.src.iter_adjacent():
+                if coord == coords.dst:
+                    if self.get(coord) is not None:
+                        return True
+                    else:
+                        return self.unit_movement_restriction(coords)
+            return False
+        else:
+            return True
 
     def perform_move(self, coords: CoordPair) -> Tuple[bool, str]:
         """Validate and perform a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
         if self.is_valid_move(coords):
-            self.set(coords.dst, self.get(coords.src))
-            self.set(coords.src, None)
+            src_unit = self.get(coords.src)
+            dst_unit = self.get(coords.dst)
+            action: ActionType = self.determine_action(coords)
+
+            if action == ActionType.MOVE:
+                return self.perform_movement(coords)
+            elif action == ActionType.ATTACK:
+                return self.perform_attack(coords, src_unit, dst_unit)
+            elif action == ActionType.REPAIR:
+                return self.perform_repair(coords, src_unit, dst_unit)
+            else:
+                return self.perform_suicide(coords)
             return (True, "")
+
         return (False, "invalid move")
 
     def next_turn(self):
@@ -387,7 +416,10 @@ class Game:
             if coords is not None and self.is_valid_coord(coords.src) and self.is_valid_coord(coords.dst):
                 return coords
             else:
+                f = open(Options.file, "a")
+                f.write('Invalid coordinates! Try again.\n')
                 print('Invalid coordinates! Try again.')
+                f.close()
 
     def human_turn(self):
         """Human player plays a move (or get via broker)."""
@@ -414,6 +446,9 @@ class Game:
                     break
                 else:
                     print("The move is not valid! Try again.")
+                    f = open(Options.file, "a")
+                    f.write("The move is not valid! Try again.\n")
+                    f.close()
 
     def computer_turn(self) -> CoordPair | None:
         """Computer plays a move."""
@@ -537,6 +572,91 @@ class Game:
             print(f"Broker error: {error}")
         return None
 
+    def determine_action(self, coords: CoordPair) -> ActionType:
+        src_unit = self.get(coords.src)
+        dst_unit = self.get(coords.dst)
+        if coords.src == coords.dst:
+            return ActionType.SUICIDE
+        else:
+            if dst_unit is None:
+                return ActionType.MOVE
+            else:
+                if src_unit.player == dst_unit.player:
+                    return ActionType.REPAIR
+                else:
+                    return ActionType.ATTACK
+
+    def perform_attack(self, coords: CoordPair, src_unit: Unit, dst_unit: Unit) -> Tuple[bool, str]:
+        src_damage = src_unit.damage_table[src_unit.type.value][dst_unit.type.value] * -1
+        dst_damage = src_unit.damage_table[dst_unit.type.value][src_unit.type.value] * -1
+        self.mod_health(coords.src, src_damage)
+        self.mod_health(coords.dst, dst_damage)
+        f = open(Options.file, "a")
+        f.write('attack from ' +str(coords.src) + ' to ' + str(coords.dst)+ '\n' + 
+                'combat damage to source = ' +  str(src_damage*-1) + ' , to target = ' + str(dst_damage*-1) + '\n')
+        f.close()
+        return (True,'attack from ' +str(coords.src) + ' to ' + str(coords.dst)+ '\n' + 
+                'combat damage to source = ' +  str(src_damage*-1) + ' , to target = ' + str(dst_damage*-1))
+
+    def perform_repair(self, coords: CoordPair, src_unit: Unit, dst_unit: Unit) -> Tuple[bool, str]:
+        repair = src_unit.repair_table[src_unit.type.value][dst_unit.type.value]
+        if repair == 0:
+            return (False,"")
+        elif dst_unit.health == 9:
+            return (False,"")
+        self.mod_health(coords.dst, repair)
+        f = open(Options.file, "a")
+        f.write('repair from ' +str(coords.src) + ' to ' + str(coords.dst) + '\n' +
+                 "repaired " + str(repair) + ' health point' + '\n')
+        f.close()
+        return (True, 'repair from ' +str(coords.src) + ' to ' + str(coords.dst) + '\n' +
+                 "repaired " + str(repair) + ' health point')
+
+    def perform_movement(self, coords: CoordPair) -> Tuple[bool, str]:
+        self.set(coords.dst, self.get(coords.src))
+        self.set(coords.src, None)
+        f = open(Options.file, "a")
+        f.write('move from ' +str(coords.src) + ' to ' + str(coords.dst) + '\n')
+        f.close()
+        return (True, 'move from ' +str(coords.src) + ' to ' + str(coords.dst))
+
+    def perform_suicide(self, coords: CoordPair) -> Tuple[bool, str]:
+        self.mod_health(coords.src, -9)
+        # Loop through all elements in the rectangular area of coords.src
+        total_damage = 0
+        for coord in coords.src.iter_range(1):
+            if self.get(coord) is not None:
+                self.mod_health(coord, -2)
+                total_damage += 2
+        f = open(Options.file, "a")
+        f.write("self-destruct at " + str(coords.src) + ' and deals ' + str(total_damage) + ' total damage' + '\n')
+        f.close()
+        return (True, "self-destruct at " + str(coords.src) + ' and deals ' + str(total_damage) + ' total damage' )
+
+    def unit_movement_restriction(self, coords: CoordPair) -> bool:
+        src_unit = self.get(coords.src)
+
+        row_dst = coords.dst.row - coords.src.row
+        col_dst = coords.dst.col - coords.src.col
+
+        # AI, Firewall and program move restrictions
+        if src_unit.type in [UnitType.AI, UnitType.Firewall, UnitType.Program]:
+            if src_unit.player == Player.Attacker:
+                if row_dst > 0 or col_dst > 0:
+                    return False
+            else:
+                if row_dst < 0 or col_dst < 0:
+                    return False
+
+        # Checks if the Player 1 Unit is adjacent to Player 2 Unit
+        for coord in coords.src.iter_adjacent():
+            unit = self.get(coord)
+            if unit is not None:
+                if src_unit.type in [UnitType.AI, UnitType.Firewall, UnitType.Program] \
+                        and src_unit.player != unit.player:
+                    return False
+        return True
+
 
 ##############################################################################################################
 
@@ -576,12 +696,25 @@ def main():
     game = Game(options=options)
 
     # the main game loop
+
+    f = open(Options.file, "w")
+    f.write('Game set to ' + str(options.max_turns) + ' turns \n')
+    f.write('Game set to ' + str(options.max_time) + ' sec per turn \n')
+    f.write(str(options.game_type)[9:] + '\n')
+    f.write("alpha-beta is " + str(options.alpha_beta) + "\n")
     while True:
         print()
         print(game)
+
+        f = open(Options.file, "a")
+        f.write(str(game))
+        f.close()
         winner = game.has_winner()
         if winner is not None:
-            print(f"{winner.name} wins!")
+            print(f"{winner.name} wins in " + str(game.turns_played) + " turns")
+            f = open(Options.file, "a")
+            f.write(f"{winner.name} wins in " + str(game.turns_played) + " turns")
+            f.close()
             break
         if game.options.game_type == GameType.AttackerVsDefender:
             game.human_turn()
