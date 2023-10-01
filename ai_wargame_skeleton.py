@@ -338,7 +338,10 @@ class Game:
         if coords.src != coords.dst:
             for coord in coords.src.iter_adjacent():
                 if coord == coords.dst:
-                    return self.unit_movement_restriction(coords)
+                    if self.get(coord) is not None:
+                        return True
+                    else:
+                        return self.unit_movement_restriction(coords)
             return False
         else:
             return True
@@ -346,17 +349,18 @@ class Game:
     def perform_move(self, coords: CoordPair) -> Tuple[bool, str]:
         """Validate and perform a move expressed as a CoordPair. TODO: WRITE MISSING CODE!!!"""
         if self.is_valid_move(coords):
-
+            src_unit = self.get(coords.src)
+            dst_unit = self.get(coords.dst)
             action: ActionType = self.determine_action(coords)
 
             if action == ActionType.MOVE:
-                self.perform_movement(coords)
+                return self.perform_movement(coords)
             elif action == ActionType.ATTACK:
-                self.perform_attack(coords)
+                return self.perform_attack(coords, src_unit, dst_unit)
             elif action == ActionType.REPAIR:
-                self.perform_repair(coords)
+                return self.perform_repair(coords, src_unit, dst_unit)
             else:
-                self.perform_suicide(coords)
+                return self.perform_suicide(coords)
             return (True, "")
 
         return (False, "invalid move")
@@ -434,8 +438,6 @@ class Game:
         else:
             while True:
                 mv = self.read_move()
-                f = open(Options.file, "a")
-                f.write(str(self.next_player.name) + ' move ' + str(mv) + '\n')
                 (success, result) = self.perform_move(mv)
                 if success:
                     print(f"Player {self.next_player.name}: ", end='')
@@ -444,6 +446,7 @@ class Game:
                     break
                 else:
                     print("The move is not valid! Try again.")
+                    f = open(Options.file, "a")
                     f.write("The move is not valid! Try again.\n")
                     f.close()
 
@@ -583,26 +586,52 @@ class Game:
                 else:
                     return ActionType.ATTACK
 
-    def perform_attack(self, coords: CoordPair):
-        damage = src_unit.damage_table[src_unit.type.value][dst_unit.type.value] * -1
-        self.mod_health(coords.src, damage)
-        self.mod_health(coords.dst, damage)
+    def perform_attack(self, coords: CoordPair, src_unit: Unit, dst_unit: Unit) -> Tuple[bool, str]:
+        src_damage = src_unit.damage_table[src_unit.type.value][dst_unit.type.value] * -1
+        dst_damage = src_unit.damage_table[dst_unit.type.value][src_unit.type.value] * -1
+        self.mod_health(coords.src, src_damage)
+        self.mod_health(coords.dst, dst_damage)
+        f = open(Options.file, "a")
+        f.write('attack from ' +str(coords.src) + ' to ' + str(coords.dst)+ '\n' + 
+                'combat damage to source = ' +  str(src_damage*-1) + ' , to target = ' + str(dst_damage*-1) + '\n')
+        f.close()
+        return (True,'attack from ' +str(coords.src) + ' to ' + str(coords.dst)+ '\n' + 
+                'combat damage to source = ' +  str(src_damage*-1) + ' , to target = ' + str(dst_damage*-1))
 
-    def perform_repair(self, coords: CoordPair):
-        repair = src_unit.repair_table[src_unit.value][dst_unit.type.value]
-        damage = repair * -1
-        self.mod_health(coords.src, damage)
+    def perform_repair(self, coords: CoordPair, src_unit: Unit, dst_unit: Unit) -> Tuple[bool, str]:
+        repair = src_unit.repair_table[src_unit.type.value][dst_unit.type.value]
+        if repair == 0:
+            return (False,"")
+        elif dst_unit.health == 9:
+            return (False,"")
         self.mod_health(coords.dst, repair)
+        f = open(Options.file, "a")
+        f.write('repair from ' +str(coords.src) + ' to ' + str(coords.dst) + '\n' +
+                 "repaired " + str(repair) + ' health point' + '\n')
+        f.close()
+        return (True, 'repair from ' +str(coords.src) + ' to ' + str(coords.dst) + '\n' +
+                 "repaired " + str(repair) + ' health point')
 
-    def perform_movement(self, coords: CoordPair):
+    def perform_movement(self, coords: CoordPair) -> Tuple[bool, str]:
         self.set(coords.dst, self.get(coords.src))
         self.set(coords.src, None)
+        f = open(Options.file, "a")
+        f.write('move from ' +str(coords.src) + ' to ' + str(coords.dst) + '\n')
+        f.close()
+        return (True, 'move from ' +str(coords.src) + ' to ' + str(coords.dst))
 
-    def perform_suicide(self, coords: CoordPair):
+    def perform_suicide(self, coords: CoordPair) -> Tuple[bool, str]:
         self.mod_health(coords.src, -9)
         # Loop through all elements in the rectangular area of coords.src
+        total_damage = 0
         for coord in coords.src.iter_range(1):
-            self.mod_health(coord, -2)
+            if self.get(coord) is not None:
+                self.mod_health(coord, -2)
+                total_damage += 2
+        f = open(Options.file, "a")
+        f.write("self-destruct at " + str(coords.src) + ' and deals ' + str(total_damage) + ' total damage' + '\n')
+        f.close()
+        return (True, "self-destruct at " + str(coords.src) + ' and deals ' + str(total_damage) + ' total damage' )
 
     def unit_movement_restriction(self, coords: CoordPair) -> bool:
         src_unit = self.get(coords.src)
@@ -669,8 +698,9 @@ def main():
     # the main game loop
 
     f = open(Options.file, "w")
-    f.write(str(options.max_turns) + ' turns \n')
-    f.write(str(options.game_type) + '\n')
+    f.write('Game set to ' + str(options.max_turns) + ' turns \n')
+    f.write('Game set to ' + str(options.max_time) + ' sec per turn \n')
+    f.write(str(options.game_type)[9:] + '\n')
     f.write("alpha-beta is " + str(options.alpha_beta) + "\n")
     while True:
         print()
@@ -681,7 +711,7 @@ def main():
         f.close()
         winner = game.has_winner()
         if winner is not None:
-            print(f"{winner.name} wins!")
+            print(f"{winner.name} wins in " + str(game.turns_played) + " turns")
             f = open(Options.file, "a")
             f.write(f"{winner.name} wins in " + str(game.turns_played) + " turns")
             f.close()
