@@ -476,13 +476,12 @@ class Game:
         """Check if the game is over and returns winner"""
         if self.options.max_turns is not None and self.turns_played >= self.options.max_turns:
             return Player.Defender
-        elif self._attacker_has_ai:
+        if self._attacker_has_ai:
             if self._defender_has_ai:
                 return None
             else:
                 return Player.Attacker
-        elif self._defender_has_ai:
-            return Player.Defender
+        return Player.Defender
 
     def move_candidates(self) -> Iterable[CoordPair]:
         """Generate valid move candidates for the next player."""
@@ -648,13 +647,13 @@ class Game:
                 if row_dst < 0 or col_dst < 0:
                     return False
 
-        # Checks if the Player 1 Unit is adjacent to Player 2 Unit
-        for coord in coords.src.iter_adjacent():
-            unit = self.get(coord)
-            if unit is not None:
-                if src_unit.type in [UnitType.AI, UnitType.Firewall, UnitType.Program] \
-                        and src_unit.player != unit.player:
-                    return False
+            # Checks if the Player 1 Unit is adjacent to Player 2 Unit
+            for coord in coords.src.iter_adjacent():
+                unit = self.get(coord)
+                if unit is not None:
+                    if src_unit.type in [UnitType.AI, UnitType.Firewall, UnitType.Program] \
+                            and src_unit.player != unit.player:
+                        return False
         return True
 
 
