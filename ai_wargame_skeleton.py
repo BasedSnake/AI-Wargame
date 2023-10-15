@@ -512,7 +512,7 @@ class Game:
             move.dst = src
             yield move.clone()
 
-    def calculate_heuristic(game: Game) -> int:
+    def calculate_heuristic2(self,move) -> int:
         VP1 = 0
         TP1 = 0
         FP1 = 0
@@ -525,8 +525,8 @@ class Game:
         AIP2 = 0
 
         # Iterate through the game board to count units for each player
-        for coord in CoordPair.from_dim(game.options.dim).iter_rectangle():
-            unit = game.get(coord)
+        for coord in CoordPair.from_dim(self.options.dim).iter_rectangle():
+            unit = self.get(coord)
             if unit is not None:
                 if unit.player == Player.Attacker:
                     if unit.type == UnitType.Virus:
@@ -551,6 +551,137 @@ class Game:
                     elif unit.type == UnitType.AI:
                         AIP2 += 1
 
+        # Attacker matrices
+        attacker_ai = [
+            [-20, -15, -5, -5, -10],
+            [-15, -10, -5, 10, -5],
+            [-5, -5, -5, 15, 10],
+            [-5, 10, 15, 20, 10],
+            [-10, -5, 10, 10, 10]
+        ]
+
+        attacker_virus = [
+            [10, 15, 15, 20, 15],
+            [15, 10, 10, 15, 20],
+            [15, 10, 10, 15, 15],
+            [20, 15, 15, 10, 10],
+            [15, 20, 15, 10, 10]
+        ]
+
+        attacker_program = [
+            [-5, -5, 10, 15, 10],
+            [-5, -5, 10, 15, 10],
+            [-5, 10, 15, 0, 5],
+            [10, 15, 10, 0, 0],
+            [0, 0, 5, 0, 0]
+        ]
+
+        attacker_firewall = [
+            [-10, -10, -5, -5, 0],
+            [-10, -10, 15, 15, 0],
+            [-5, 15, 15, 10, 0],
+            [-5, 15, 10, 5, 0],
+            [0, 0, 0, 0, 0]
+        ]
+
+        # Defender matrices
+        defender_ai = [
+            [10, 5, 0, -5, -20],
+            [5, 5, 0, -5, -20],
+            [0, 0, 0, -5, -20],
+            [-5, -5, -5, -5, -20],
+            [-20, -20, -20, -20, -20]
+        ]
+
+        defender_tech = [
+            [10, 10, 10, 5, -5],
+            [10, 15, 15, 0, -10],
+            [10, 15, 0, -10, -20],
+            [5, 0, -10, -20, -20],
+            [-5, -10, -20, -20, -20]
+        ]
+
+        defender_program = [
+            [0, 0, 0, 0, 0],
+            [0, 5, 10, 5, -10],
+            [0, 10, 5, -5, -20],
+            [0, 5, -5, -20, -20],
+            [0, -10, -20, -20, -20]
+        ]
+
+        defender_firewall = [
+            [0, 0, 5, 10, -5],
+            [0, 0, 10, 5, -10],
+            [5, 10, 5, -10, -20],
+            [10, 5, -10, -20, -20],
+            [-5, -10, -20, -20, -20]
+        ]
+
+        unit = self.get(move.src)
+        score = 0
+        if unit is not None:
+            if unit.player == Player.Attacker:
+                if unit.type == UnitType.Virus:
+                    score = attacker_virus[move.dst.col][move.dst.row]
+                elif unit.type == UnitType.Firewall:
+                    score = attacker_firewall[move.dst.col][move.dst.row]
+                elif unit.type == UnitType.Program:
+                    score = attacker_program[move.dst.col][move.dst.row]
+                elif unit.type == UnitType.AI:
+                    score = attacker_ai[move.dst.col][move.dst.row]
+            elif unit.player == Player.Defender:
+                if unit.type == UnitType.Tech:
+                    score = defender_tech[move.dst.col][move.dst.row]
+                elif unit.type == UnitType.Firewall:
+                    score = defender_firewall[move.dst.col][move.dst.row]
+                elif unit.type == UnitType.Program:
+                    score = defender_program[move.dst.col][move.dst.row]
+                elif unit.type == UnitType.AI:
+                    score = defender_ai[move.dst.col][move.dst.row]
+
+        # Calculate the heuristic score based on the provided formula
+        heuristic_score = (
+                (10 * VP1 + 8 * TP1 + 3 * FP1 + 3 * PP1 + 999 * AIP1) -
+                (10 * VP2 + 8 * TP2 + 3 * FP2 + 3 * PP2 + 999 * AIP2)
+        ) * score
+
+        return heuristic_score
+
+    def calculate_heuristic(self) -> int:
+        VP1 = 0
+        TP1 = 0
+        FP1 = 0
+        PP1 = 0
+        AIP1 = 0
+        VP2 = 0
+        TP2 = 0
+        FP2 = 0
+        PP2 = 0
+        AIP2 = 0
+
+        # Iterate through the game board to count units for each player
+        for coord in CoordPair.from_dim(self.options.dim).iter_rectangle():
+            unit = self.get(coord)
+            if unit is not None:
+                if unit.player == Player.Attacker:
+                    if unit.type == UnitType.Virus:
+                        VP1 += 1
+                    elif unit.type == UnitType.Firewall:
+                        FP1 += 1
+                    elif unit.type == UnitType.Program:
+                        PP1 += 1
+                    elif unit.type == UnitType.AI:
+                        AIP1 += 1
+                elif unit.player == Player.Defender:
+                    if unit.type == UnitType.Tech:
+                        TP2 += 1
+                    elif unit.type == UnitType.Firewall:
+                        FP2 += 1
+                    elif unit.type == UnitType.Program:
+                        PP2 += 1
+                    elif unit.type == UnitType.AI:
+                        AIP2 += 1
+
         # Calculate the heuristic score based on the provided formula
         heuristic_score = (
                 (3 * VP1 + 3 * TP1 + 3 * FP1 + 3 * PP1 + 9999 * AIP1) -
@@ -559,9 +690,9 @@ class Game:
 
         return heuristic_score
 
-    def minimax(self, depth, maximizing_player, alpha, beta, start_time):
+    def minimax(self, depth, maximizing_player, alpha, beta, start_time,move):
         if depth == 0 or self.is_finished():
-            return self.calculate_heuristic(), None, 0  # Also return the best move
+            return self.calculate_heuristic2(move), None, 0  # Also return the best move
 
         if maximizing_player:
             max_eval = MIN_HEURISTIC_SCORE
@@ -575,7 +706,7 @@ class Game:
                 game_clone = self.clone()
                 game_clone.perform_move(move)
                 game_clone.next_turn()
-                eval, _, _ = game_clone.minimax(depth - 1, False, alpha, beta, start_time)
+                eval, _, _ = game_clone.minimax(depth - 1, False, alpha, beta, start_time,move)
                 if eval > max_eval:
                     max_eval = eval
                     best_move = move  # Update the best move
@@ -597,7 +728,7 @@ class Game:
                 game_clone = self.clone()
                 game_clone.perform_move(move)
                 game_clone.next_turn()
-                eval, _, _ = game_clone.minimax(depth - 1, True, alpha, beta, start_time)
+                eval, _, _ = game_clone.minimax(depth - 1, True, alpha, beta, start_time,move)
                 if eval < min_eval:
                     min_eval = eval
                     best_move = move  # Update the best move
@@ -622,10 +753,10 @@ class Game:
         start_time = datetime.now()
         game_clone = self.clone()
         if self.next_player == Player.Attacker:
-            (score, move, avg_depth) = game_clone.minimax(3, True, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE, start_time)
+            (score, move, avg_depth) = game_clone.minimax(2, True, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE, start_time,None)
         else:
-            (score, move, avg_depth) = game_clone.minimax(3, False, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE,
-                                                          start_time)
+            (score, move, avg_depth) = game_clone.minimax(2, False, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE,
+                                                          start_time,None)
 
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
         self.stats.total_seconds += elapsed_seconds
