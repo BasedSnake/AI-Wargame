@@ -617,8 +617,9 @@ class Game:
             [-5, -10, -20, -20, -20]
         ]
 
-        unit = self.get(move.src)
-        score = 0
+        unit = self.get(move.dst)
+        score = 1
+
         if unit is not None:
             if unit.player == Player.Attacker:
                 if unit.type == UnitType.Virus:
