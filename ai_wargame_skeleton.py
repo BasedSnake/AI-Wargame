@@ -512,7 +512,149 @@ class Game:
             move.dst = src
             yield move.clone()
 
-    def calculate_heuristic2(self,move) -> int:
+    def calculate_heuristic3(self, move, action,prev_state) -> int:
+        src_unit = prev_state.get(move.src)
+        dst_unit = prev_state.get(move.dst)
+        score = 1
+        distance = 0
+
+        if action == ActionType.MOVE:
+            for coord in CoordPair.from_dim(prev_state.options.dim).iter_rectangle():
+                unit = prev_state.get(coord)
+                if unit is not None:
+                    if unit.type == UnitType.AI and unit.player != src_unit.player:
+                        distance = math.sqrt((coord.col - move.dst.col) ** 2 + (coord.row - move.dst.row) ** 2)
+                        break
+
+            if unit.type == UnitType.Virus:
+                score = 80 - distance
+            elif unit.type == UnitType.Firewall:
+                score = 70 - distance
+            elif unit.type == UnitType.Program:
+                score = 60 - distance
+            else:
+                score = 50 - distance
+
+            if src_unit.player == Player.Defender:
+                score = score * -1
+
+        elif action == ActionType.ATTACK:
+            if src_unit.player == Player.Attacker:
+                if src_unit.type == UnitType.Virus:
+                    if dst_unit.type == UnitType.Tech:
+                        score = 98
+                    elif dst_unit.type == UnitType.Firewall:
+                        score = 89
+                    elif dst_unit.type == UnitType.Program:
+                        score = 94
+                    else:
+                        score = 100
+                elif src_unit.type == UnitType.Firewall:
+                    if dst_unit.type == UnitType.Tech:
+                        score = 92
+                    elif dst_unit.type == UnitType.Firewall:
+                        score = 91
+                    elif dst_unit.type == UnitType.Program:
+                        score = 93
+                    else:
+                        score = 90
+                elif src_unit.type == UnitType.Program:
+                    if dst_unit.type == UnitType.Tech:
+                        score = 99
+                    elif dst_unit.type == UnitType.Firewall:
+                        score = 95
+                    elif dst_unit.type == UnitType.Program:
+                        score = 97
+                    else:   # AI
+                        score = 96
+                else:
+                    if dst_unit.type == UnitType.Tech:
+                        score = 88
+                    elif dst_unit.type == UnitType.Firewall:
+                        score = 86
+                    elif dst_unit.type == UnitType.Program:
+                        score = 84
+                    else:
+                        score = 87
+            else:
+                if src_unit.type == UnitType.Tech:
+                    if dst_unit.type == UnitType.Virus:
+                        score = -91
+                    elif dst_unit.type == UnitType.Firewall:
+                        score = -86
+                    elif dst_unit.type == UnitType.Program:
+                        score = -92
+                    else:
+                        score = -93
+                elif src_unit.type == UnitType.Firewall:
+                    if dst_unit.type == UnitType.Virus:
+                        score = -95
+                    elif dst_unit.type == UnitType.Firewall:
+                        score = -84
+                    elif dst_unit.type == UnitType.Program:
+                        score = -94
+                    else:
+                        score = -85
+                elif src_unit.type == UnitType.Program:
+                    if dst_unit.type == UnitType.Virus:
+                        score = -83
+                    elif dst_unit.type == UnitType.Firewall:
+                        score = -87
+                    elif dst_unit.type == UnitType.Program:
+                        score = -96
+                    else:
+                        score = -97
+                else:
+                    if dst_unit.type == UnitType.Virus:
+                        score = 0
+                    elif dst_unit.type == UnitType.Firewall:
+                        score = -81
+                    elif dst_unit.type == UnitType.Program:
+                        score = -80
+                    else:
+                        score = -79
+        elif action == ActionType.REPAIR:
+            if src_unit.player == Player.Attacker:
+                score = 85
+            else:
+                if dst_unit.type == UnitType.Firewall:
+                    if dst_unit.health <= 6:
+                        score = -98
+                    else:
+                        score = -88
+
+                elif dst_unit.type == UnitType.Program:
+                    if dst_unit.health <= 6:
+                        score = -99
+                    else:
+                        score = -89
+                else:  # AI
+                    if dst_unit.health <= 6:
+                        score = -100
+                    else:
+                        score = -90
+
+        else:
+            # if dst_unit.type == UnitType.Firewall:
+            #     score = 3
+            # elif dst_unit.type == UnitType.Program:
+            #     score = 2
+            # elif dst_unit.type == UnitType.Virus or dst_unit.type == UnitType.Tech:
+            #     score = 1
+            # if not self.is_finished():
+            #     score = 1
+            # else:  # AI
+            #     score = 0
+            #
+            # if self.next_player != Player.Defender:
+            #     score = score * -1
+            if self.next_player == Player.Attacker:
+                score = 300
+            else:
+                score = -300
+        return int(score)
+
+    def calculate_heuristic2(self, move) -> int:
         VP1 = 0
         TP1 = 0
         FP1 = 0
@@ -691,9 +833,9 @@ class Game:
 
         return heuristic_score
 
-    def minimax(self, depth, maximizing_player, alpha, beta, start_time,move):
+    def minimax(self, depth, maximizing_player, alpha, beta, start_time, move, action,prev_state):
         if depth == 0 or self.is_finished():
-            return self.calculate_heuristic2(move), None, 0  # Also return the best move
+            return self.calculate_heuristic3(move, action,prev_state), None, 0  # Also return the best move
 
         if maximizing_player:
             max_eval = MIN_HEURISTIC_SCORE
@@ -705,9 +847,10 @@ class Game:
                         # Time limit exceeded, return the last result
                         break
                 game_clone = self.clone()
+                action2 = self.determine_action(move)
                 game_clone.perform_move(move)
                 game_clone.next_turn()
-                eval, _, _ = game_clone.minimax(depth - 1, False, alpha, beta, start_time,move)
+                eval, _, _ = game_clone.minimax(depth - 1, False, alpha, beta, start_time, move, action2,self.clone())
                 if eval > max_eval:
                     max_eval = eval
                     best_move = move  # Update the best move
@@ -727,9 +870,10 @@ class Game:
                         # Time limit exceeded, return the last result
                         break
                 game_clone = self.clone()
+                action2 = self.determine_action(move)
                 game_clone.perform_move(move)
                 game_clone.next_turn()
-                eval, _, _ = game_clone.minimax(depth - 1, True, alpha, beta, start_time,move)
+                eval, _, _ = game_clone.minimax(depth - 1, True, alpha, beta, start_time, move, action2,self.clone())
                 if eval < min_eval:
                     min_eval = eval
                     best_move = move  # Update the best move
@@ -754,10 +898,11 @@ class Game:
         start_time = datetime.now()
         game_clone = self.clone()
         if self.next_player == Player.Attacker:
-            (score, move, avg_depth) = game_clone.minimax(2, True, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE, start_time,None)
+            (score, move, avg_depth) = game_clone.minimax(2, True, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE, start_time,
+                                                          None, None,None)
         else:
             (score, move, avg_depth) = game_clone.minimax(2, False, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE,
-                                                          start_time,None)
+                                                          start_time, None, None,None)
 
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
         self.stats.total_seconds += elapsed_seconds
