@@ -8,6 +8,7 @@ from time import sleep
 from typing import Tuple, TypeVar, Type, Iterable, ClassVar
 import random
 import requests
+import math
 
 # maximum and minimum values for our heuristic scores (usually represents an end of game condition)
 MAX_HEURISTIC_SCORE = 2000000000
@@ -533,89 +534,89 @@ class Game:
             elif unit.type == UnitType.Program:
                 score = 60 - distance
             else:
-                score = 50 - distance
+                score = 20 - distance
 
-            if src_unit.player == Player.Defender:
+            if src_unit.player == Player.Attacker:
                 score = score * -1
 
         elif action == ActionType.ATTACK:
-            if src_unit.player == Player.Attacker:
-                if src_unit.type == UnitType.Virus:
-                    if dst_unit.type == UnitType.Tech:
-                        score = 98
+            if src_unit.player == Player.Defender:
+                if src_unit.type == UnitType.Tech:
+                    if dst_unit.type == UnitType.Virus:
+                        score = 90
                     elif dst_unit.type == UnitType.Firewall:
-                        score = 89
+                        score = 80
                     elif dst_unit.type == UnitType.Program:
-                        score = 94
+                        score = 75
                     else:
                         score = 100
                 elif src_unit.type == UnitType.Firewall:
-                    if dst_unit.type == UnitType.Tech:
-                        score = 92
-                    elif dst_unit.type == UnitType.Firewall:
-                        score = 91
-                    elif dst_unit.type == UnitType.Program:
-                        score = 93
-                    else:
+                    if dst_unit.type == UnitType.Virus:
                         score = 90
+                    elif dst_unit.type == UnitType.Firewall:
+                        score = 80
+                    elif dst_unit.type == UnitType.Program:
+                        score = 80
+                    else:
+                        score = 100
                 elif src_unit.type == UnitType.Program:
-                    if dst_unit.type == UnitType.Tech:
+                    if dst_unit.type == UnitType.Virus:
                         score = 99
                     elif dst_unit.type == UnitType.Firewall:
                         score = 95
                     elif dst_unit.type == UnitType.Program:
                         score = 97
                     else:   # AI
-                        score = 96
+                        score = 100
                 else:
-                    if dst_unit.type == UnitType.Tech:
-                        score = 88
-                    elif dst_unit.type == UnitType.Firewall:
-                        score = 86
-                    elif dst_unit.type == UnitType.Program:
-                        score = 84
-                    else:
-                        score = 87
-            else:
-                if src_unit.type == UnitType.Tech:
                     if dst_unit.type == UnitType.Virus:
+                        score = -100
+                    elif dst_unit.type == UnitType.Firewall:
+                        score = 0
+                    elif dst_unit.type == UnitType.Program:
+                        score = 0
+                    else:
+                        score = 0
+            else:
+                if src_unit.type == UnitType.Virus:
+                    if dst_unit.type == UnitType.Tech:
                         score = -91
                     elif dst_unit.type == UnitType.Firewall:
                         score = -86
                     elif dst_unit.type == UnitType.Program:
                         score = -92
                     else:
-                        score = -93
+                        score = -100
                 elif src_unit.type == UnitType.Firewall:
-                    if dst_unit.type == UnitType.Virus:
+                    if dst_unit.type == UnitType.Tech:
                         score = -95
                     elif dst_unit.type == UnitType.Firewall:
-                        score = -84
+                        score = -80
                     elif dst_unit.type == UnitType.Program:
-                        score = -94
+                        score = -90
                     else:
-                        score = -85
+                        score = -100
                 elif src_unit.type == UnitType.Program:
-                    if dst_unit.type == UnitType.Virus:
+                    if dst_unit.type == UnitType.Tech:
                         score = -83
                     elif dst_unit.type == UnitType.Firewall:
-                        score = -87
-                    elif dst_unit.type == UnitType.Program:
-                        score = -96
-                    else:
-                        score = -97
-                else:
-                    if dst_unit.type == UnitType.Virus:
-                        score = 0
-                    elif dst_unit.type == UnitType.Firewall:
-                        score = -81
+                        score = -70
                     elif dst_unit.type == UnitType.Program:
                         score = -80
                     else:
-                        score = -79
+                        score = -100
+                else:
+                    if dst_unit.type == UnitType.Tech:
+                        score = 0
+                    elif dst_unit.type == UnitType.Firewall:
+                        score = 20
+                    elif dst_unit.type == UnitType.Program:
+                        score = 20
+                    else:
+                        score = -100
         elif action == ActionType.REPAIR:
-            if src_unit.player == Player.Attacker:
-                score = 85
+            if src_unit.player == Player.Defender:
+                score = 95
             else:
                 if dst_unit.type == UnitType.Firewall:
                     if dst_unit.health <= 6:
@@ -656,15 +657,25 @@ class Game:
 
     def calculate_heuristic2(self, move) -> int:
         VP1 = 0
+        healthVP1 = 0
         TP1 = 0
+        healthTP1 = 0
         FP1 = 0
+        healthFP1 = 0
         PP1 = 0
+        healthPP1 = 0
         AIP1 = 0
+        healthAIP1 = 0
         VP2 = 0
+        healthVP2 = 0
         TP2 = 0
+        healthTP2 = 0
         FP2 = 0
+        healthFP2 = 0
         PP2 = 0
+        healthPP2 = 0
         AIP2 = 0
+        healthAIP2 = 0
 
         # Iterate through the game board to count units for each player
         for coord in CoordPair.from_dim(self.options.dim).iter_rectangle():
@@ -673,90 +684,102 @@ class Game:
                 if unit.player == Player.Attacker:
                     if unit.type == UnitType.Virus:
                         VP1 += 1
+                        healthVP1 += unit.health
                     elif unit.type == UnitType.Tech:
                         TP1 += 1
+                        healthTP1 += unit.health
                     elif unit.type == UnitType.Firewall:
                         FP1 += 1
+                        healthFP1 += unit.health
                     elif unit.type == UnitType.Program:
                         PP1 += 1
+                        healthPP1 += unit.health
                     elif unit.type == UnitType.AI:
                         AIP1 += 1
+                        healthAIP1 += unit.health
                 elif unit.player == Player.Defender:
                     if unit.type == UnitType.Virus:
                         VP2 += 1
+                        healthVP2 += unit.health
                     elif unit.type == UnitType.Tech:
                         TP2 += 1
+                        healthTP2 += unit.health
                     elif unit.type == UnitType.Firewall:
                         FP2 += 1
+                        healthFP2 += unit.health
                     elif unit.type == UnitType.Program:
                         PP2 += 1
+                        healthPP2 += unit.health
                     elif unit.type == UnitType.AI:
                         AIP2 += 1
+                        healthAIP2 += unit.health
 
         # Attacker matrices
         attacker_ai = [
-            [-20, -15, -5, -5, -10],
-            [-15, -10, -5, 10, -5],
-            [-5, -5, -5, 15, 10],
-            [-5, 10, 15, 20, 10],
-            [-10, -5, 10, 10, 10]
+            [20, 15, 5, 5, 10],
+            [15, 10, 5, -10, 5],
+            [5, 5, 5, -15, -10],
+            [5, -10, -15, -20, -10],
+            [10, 5, -10, -10, -10]
         ]
 
         attacker_virus = [
-            [10, 15, 15, 20, 15],
-            [15, 10, 10, 15, 20],
-            [15, 10, 10, 15, 15],
-            [20, 15, 15, 10, 10],
-            [15, 20, 15, 10, 10]
+            [-30, -30, -30, -25, -15],
+            [-30, -10, -10, -20, -15],
+            [-40, -10, -10, -15, -15],
+            [-30, -20, -15, -10, -10],
+            [-25, -25, -20, -10, -10]
         ]
 
         attacker_program = [
-            [-5, -5, 10, 15, 10],
-            [-5, -5, 10, 15, 10],
-            [-5, 10, 15, 0, 5],
-            [10, 15, 10, 0, 0],
-            [0, 0, 5, 0, 0]
+            [5, 5, -10, -15, -10],
+            [5, 5, -40, -30, -10],
+            [5, -40, -30, 0, -5],
+            [-10, -20, -20, 0, 0],
+            [0, 0, -20, 0, 0]
         ]
 
         attacker_firewall = [
-            [-10, -10, -5, -5, 0],
-            [-10, -10, 15, 15, 0],
-            [-5, 15, 15, 10, 0],
-            [-5, 15, 10, 5, 0],
+            [10, 10, 5, 5, 0],
+            [10, 10, -15, -15, 0],
+            [5, -15, -15, -10, 0],
+            [5, -15, -10, -5, 0],
             [0, 0, 0, 0, 0]
         ]
 
         # Defender matrices
         defender_ai = [
-            [10, 5, 0, -5, -20],
-            [5, 5, 0, -5, -20],
-            [0, 0, 0, -5, -20],
-            [-5, -5, -5, -5, -20],
-            [-20, -20, -20, -20, -20]
+            [100, 120, 0, -150, -200],
+            [120, 120, 0, -150, -200],
+            [0, 0, 0, -150, -200],
+            [-150, -150, -150, -150, -200],
+            [-20, -200, -200, -200, -200]
         ]
 
+        
+
         defender_tech = [
-            [10, 10, 10, 5, -5],
-            [10, 15, 15, 0, -10],
-            [10, 15, 0, -10, -20],
-            [5, 0, -10, -20, -20],
+            [5, 10, 30, 5, -5],
+            [10, 20, 40, 0, -10],
+            [30, 40, 10, -10, -20],
+            [5, 30, -10, -20, -20],
             [-5, -10, -20, -20, -20]
-        ]
+]
 
         defender_program = [
             [0, 0, 0, 0, 0],
-            [0, 5, 10, 5, -10],
-            [0, 10, 5, -5, -20],
-            [0, 5, -5, -20, -20],
-            [0, -10, -20, -20, -20]
+            [0, 20, 30, 20, -20],
+            [0, 30, 20, -20, -50],
+            [0, 20, -20, -50, -100],
+            [0, -20, -50, -100, -100]
         ]
 
         defender_firewall = [
-            [0, 0, 5, 10, -5],
-            [0, 0, 10, 5, -10],
-            [5, 10, 5, -10, -20],
-            [10, 5, -10, -20, -20],
-            [-5, -10, -20, -20, -20]
+            [0, 0, 5, 40, 25],
+            [0, 0, 10, 40, -20],
+            [5, 30, 20, -20, -20],
+            [30, 20, -20, -20, -20],
+            [10, -20, -20, -20, -20]
         ]
 
         unit = self.get(move.dst)
@@ -784,9 +807,9 @@ class Game:
 
         # Calculate the heuristic score based on the provided formula
         heuristic_score = (
-                (10 * VP1 + 8 * TP1 + 3 * FP1 + 3 * PP1 + 999 * AIP1) -
-                (10 * VP2 + 8 * TP2 + 3 * FP2 + 3 * PP2 + 999 * AIP2)
-        ) * score
+                ((100 + score + healthVP1) * VP1 + (80 + score + healthTP1) * TP1 + (45 + score + healthFP1) * FP1 + (50 + score + healthPP1) * PP1 + (9999 + score + healthAIP1) * AIP1 ) -
+                ((100 + score + healthVP1) * VP2 + (80 + score + healthTP2) * TP2 + (45 + score + healthFP2) * FP2 + (50 + score + healthPP2) * PP2 + (9999 + score + healthAIP2) * AIP2 )
+        )
 
         return heuristic_score
 
@@ -835,7 +858,7 @@ class Game:
 
     def minimax(self, depth, maximizing_player, alpha, beta, start_time, move, action,prev_state):
         if depth == 0 or self.is_finished():
-            return self.calculate_heuristic3(move, action,prev_state), None, 0  # Also return the best move
+            return self.calculate_heuristic2(move), None, 0  # Also return the best move
 
         if maximizing_player:
             max_eval = MIN_HEURISTIC_SCORE
@@ -982,8 +1005,8 @@ class Game:
                     return ActionType.ATTACK
 
     def perform_attack(self, coords: CoordPair, src_unit: Unit, dst_unit: Unit) -> Tuple[bool, str]:
-        src_damage = src_unit.damage_table[src_unit.type.value][dst_unit.type.value] * -1
-        dst_damage = src_unit.damage_table[dst_unit.type.value][src_unit.type.value] * -1
+        src_damage = src_unit.damage_table[dst_unit.type.value][src_unit.type.value] * -1
+        dst_damage = src_unit.damage_table[src_unit.type.value][dst_unit.type.value] * -1
         self.mod_health(coords.src, src_damage)
         self.mod_health(coords.dst, dst_damage)
         return (True, 'attack from ' + str(coords.src) + ' to ' + str(coords.dst) + '\n' +
