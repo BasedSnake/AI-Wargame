@@ -946,7 +946,7 @@ class Game:
                                                                             list)
         average_branching_factor = 0
         parent_nodes_value = 0
-
+        print(f"Heuristic score: {score}")
         if len(self._cumulative_evals) == 0:
             self._cumulative_evals = [0] * (depth + 1)
 
@@ -959,13 +959,13 @@ class Game:
 
         print("Cumulative eval by depth: ", end="")
         index = depth
-        for i in range(len(number_of_states)):
+        for i in range(len(number_of_states)-1):
             print(str(i + 1) + "=" + str(self._cumulative_evals[index]), end=" ")
             index -= 1
         print()
         print("Cumulative eval by depth (Percentage): ", end="")
         index = depth
-        for i in range(len(number_of_states)):
+        for i in range(len(number_of_states)-1):
             percentage = (self._cumulative_evals[index] / cumulative_value) * 100
             print(f"{i + 1}={percentage:.1f}%", end=" ")
             index -= 1
@@ -974,27 +974,43 @@ class Game:
             parent_nodes_value += number_of_states[i]
 
         print()
-        average_branching_factor = (depth - 1) / parent_nodes_value
-        print(f"Average branching factor: {average_branching_factor:.1f}", end=" ")
+        index = depth
+        total = 0
+        for i in range(len(number_of_states)):
+            if index > 1:
+                total += 1 /(self._cumulative_evals[index] / self._cumulative_evals[index - 1])
+                index -= 1
+        average_branching_factor = total/(len(number_of_states)-1)
+        print("Average branching factor: " + str(round(average_branching_factor, 1)))
 
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
         # print("TIME : " + str(elapsed_seconds))
         self.stats.total_seconds += elapsed_seconds
         f = open(file, "a")
         f.write("Heuristic score: " + str(score) + "\n")
-        f.write("Evals per depth: " + "\n")
-        f.write("Eval perf.: " + "\n")
+        f.write("Cumulative eval : " + str(cumulative_value) + '\n')
         f.write("Elapsed time: " + "{:.1f}".format(elapsed_seconds) + "s\n")
-        print(f"Heuristic score: {score}")
+        f.write("Cumulative eval by depth: ")
+        index = depth
+        for i in range(len(number_of_states)-1):
+            f.write(str(i + 1) + "=" + str(self._cumulative_evals[index]) + ' ')
+            index -= 1
+        f.write('\n' +"Cumulative eval by depth (Percentage): ")
+        index = depth
+        for i in range(len(number_of_states)-1):
+            percentage = (self._cumulative_evals[index] / cumulative_value) * 100
+            f.write(f"{i + 1}={percentage:.1f}% ")
+            index -= 1
+        f.write('\n'+"Average branching factor: " + str(round(average_branching_factor, 1))+'\n')
+
         # print(f"Average recursive depth: {avg_depth:0.1f}")
-        print(f"Evals per depth: ", end='')
-        for k in sorted(self.stats.evaluations_per_depth.keys()):
-            print(f"{k}:{self.stats.evaluations_per_depth[k]} ", end='')
-        print()
+        #print(f"Evals per depth: ", end='')
+        #for k in sorted(self.stats.evaluations_per_depth.keys()):
+            #print(f"{k}:{self.stats.evaluations_per_depth[k]} ", end='')
         total_evals = sum(self.stats.evaluations_per_depth.values())
-        if self.stats.total_seconds > 0:
-            print(f"Eval perf.: {total_evals / self.stats.total_seconds / 1000:0.1f}k/s")
-        print(f"Elapsed time: {elapsed_seconds:0.1f}s")
+        #if self.stats.total_seconds > 0:
+            #print(f"Eval perf.: {total_evals / self.stats.total_seconds / 1000:0.1f}k/s")
+        print(f"Elapsed time: {elapsed_seconds:0.1f}s" + '\n')
         f.close()
         return move
 
