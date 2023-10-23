@@ -243,7 +243,6 @@ class Options:
     broker: str | None = None
 
 
-
 ##############################################################################################################
 
 @dataclass(slots=True)
@@ -427,7 +426,7 @@ class Game:
                 return coords
             else:
                 f = open(file, "a")
-                f.write( str(coords.src) + " " + str(coords.dst) + ' are Invalid coordinates! Try again.\n')
+                f.write(str(coords.src) + " " + str(coords.dst) + ' are Invalid coordinates! Try again.\n')
                 print('Invalid coordinates! Try again.')
                 f.close()
 
@@ -779,8 +778,9 @@ class Game:
             [30, 20, -20, -20, -20],
             [10, -20, -20, -20, -20]
         ]
-
-        unit = self.get(move.dst)
+        unit = None
+        if move is not None:
+            unit = self.get(move.dst)
         score = 1
 
         if unit is not None:
@@ -874,8 +874,6 @@ class Game:
                 action2 = self.determine_action(move)
                 game_clone.perform_move(move)
                 game_clone.next_turn()
-                if depth == 4:
-                    print("HELLO")
                 eval, _, _, number_of_states = game_clone.minimax(depth - 1, False, alpha, beta, start_time, move,
                                                                   action2, self.clone(), number_of_states)
                 if eval > max_eval:
@@ -886,8 +884,7 @@ class Game:
                     if beta <= alpha:
                         break
                 counter += 1
-            number_of_states[depth] = number_of_states[depth] + counter
-            print("COUNTER WITH depth " + str(depth) + " : " + str(counter))
+            number_of_states[depth - 1] = number_of_states[depth - 1] + counter
             best_result = (max_eval, best_move, depth, number_of_states)
             return best_result
         else:
@@ -914,8 +911,7 @@ class Game:
                     if beta <= alpha:
                         break
                 counter += 1
-                print("COUNTER WITH depth " + str(depth) + " : " + str(counter))
-            number_of_states[depth] = number_of_states[depth] + counter
+            number_of_states[depth - 1] = number_of_states[depth - 1] + counter
             return min_eval, best_move, 0, number_of_states
 
     def random_move(self) -> Tuple[int, CoordPair | None, float]:
@@ -931,10 +927,8 @@ class Game:
         """Suggest the next move using minimax alpha beta. TODO: REPLACE RANDOM_MOVE WITH PROPER GAME LOGIC!!!"""
         start_time = datetime.now()
         game_clone = self.clone()
-        depth = 4
-        list = [0] * (depth + 1)
-        eval_per_depth = 0
-        number_of_nodes = 0
+        depth = 2
+        list = [0] * depth
         if self.next_player == Player.Attacker:
             (score, move, avg_depth, number_of_states) = game_clone.minimax(depth, True, MIN_HEURISTIC_SCORE,
                                                                             MAX_HEURISTIC_SCORE, start_time,
@@ -944,72 +938,77 @@ class Game:
                                                                             MAX_HEURISTIC_SCORE,
                                                                             start_time, None, None, None,
                                                                             list)
-        average_branching_factor = 0
-        parent_nodes_value = 0
+
+        # Initialize the list
         print(f"Heuristic score: {score}")
         if len(self._cumulative_evals) == 0:
-            self._cumulative_evals = [0] * (depth + 1)
+            self._cumulative_evals = [0] * depth
 
         cumulative_value = 0
-        for i in range(len(number_of_states)):
-            self._cumulative_evals[i] = self._cumulative_evals[i] + number_of_states[i]
-            cumulative_value += self._cumulative_evals[i]
+        if depth > 0:
+            for i in range(len(number_of_states)):
+                self._cumulative_evals[i] = self._cumulative_evals[i] + number_of_states[i]
+                cumulative_value += self._cumulative_evals[i]
 
         print("Cumulative eval : " + str(cumulative_value))
-
         print("Cumulative eval by depth: ", end="")
-        index = depth
-        for i in range(len(number_of_states)-1):
-            print(str(i + 1) + "=" + str(self._cumulative_evals[index]), end=" ")
-            index -= 1
+
+        index = depth - 1
+        if depth > 0:
+            for i in range(len(number_of_states)):
+                print(str(i + 1) + "=" + str(self._cumulative_evals[index]), end=" ")
+                index -= 1
         print()
         print("Cumulative eval by depth (Percentage): ", end="")
-        index = depth
-        for i in range(len(number_of_states)-1):
-            percentage = (self._cumulative_evals[index] / cumulative_value) * 100
-            print(f"{i + 1}={percentage:.1f}%", end=" ")
-            index -= 1
-
-        for i in range(len(number_of_states) - 1):
-            parent_nodes_value += number_of_states[i]
+        index = depth - 1
+        if depth > 0:
+            for i in range(len(number_of_states)):
+                percentage = (self._cumulative_evals[index] / cumulative_value) * 100
+                print(f"{i + 1}={percentage:.1f}%", end=" ")
+                index -= 1
 
         print()
-        index = depth
+
         total = 0
-        for i in range(len(number_of_states)):
-            if index > 1:
-                total += 1 /(self._cumulative_evals[index] / self._cumulative_evals[index - 1])
-                index -= 1
-        average_branching_factor = total/(len(number_of_states)-1)
+        average_branching_factor = 0
+        if depth > 0:
+            for i in range(len(number_of_states)):
+                if i <= depth - 1:
+                    # total += 1 / (self._cumulative_evals[index] / self._cumulative_evals[index - 1])
+                    total += (number_of_states[i] / number_of_states[i - 1])
+
+            average_branching_factor = total / depth
         print("Average branching factor: " + str(round(average_branching_factor, 1)))
 
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
-        # print("TIME : " + str(elapsed_seconds))
         self.stats.total_seconds += elapsed_seconds
+
         f = open(file, "a")
         f.write("Heuristic score: " + str(score) + "\n")
         f.write("Cumulative eval : " + str(cumulative_value) + '\n')
         f.write("Elapsed time: " + "{:.1f}".format(elapsed_seconds) + "s\n")
         f.write("Cumulative eval by depth: ")
-        index = depth
-        for i in range(len(number_of_states)-1):
-            f.write(str(i + 1) + "=" + str(self._cumulative_evals[index]) + ' ')
-            index -= 1
-        f.write('\n' +"Cumulative eval by depth (Percentage): ")
-        index = depth
-        for i in range(len(number_of_states)-1):
-            percentage = (self._cumulative_evals[index] / cumulative_value) * 100
-            f.write(f"{i + 1}={percentage:.1f}% ")
-            index -= 1
-        f.write('\n'+"Average branching factor: " + str(round(average_branching_factor, 1))+'\n')
+        index = depth - 1
+        if depth > 0:
+            for i in range(len(number_of_states)):
+                f.write(str(i + 1) + "=" + str(self._cumulative_evals[index]) + ' ')
+                index -= 1
+        f.write('\n' + "Cumulative eval by depth (Percentage): ")
+        index = depth - 1
+        if depth > 0:
+            for i in range(len(number_of_states)):
+                percentage = (self._cumulative_evals[index] / cumulative_value) * 100
+                f.write(f"{i + 1}={percentage:.1f}% ")
+                index -= 1
+        f.write('\n' + "Average branching factor: " + str(round(average_branching_factor, 1)) + '\n')
 
         # print(f"Average recursive depth: {avg_depth:0.1f}")
-        #print(f"Evals per depth: ", end='')
-        #for k in sorted(self.stats.evaluations_per_depth.keys()):
-            #print(f"{k}:{self.stats.evaluations_per_depth[k]} ", end='')
+        # print(f"Evals per depth: ", end='')
+        # for k in sorted(self.stats.evaluations_per_depth.keys()):
+        # print(f"{k}:{self.stats.evaluations_per_depth[k]} ", end='')
         total_evals = sum(self.stats.evaluations_per_depth.values())
-        #if self.stats.total_seconds > 0:
-            #print(f"Eval perf.: {total_evals / self.stats.total_seconds / 1000:0.1f}k/s")
+        # if self.stats.total_seconds > 0:
+        # print(f"Eval perf.: {total_evals / self.stats.total_seconds / 1000:0.1f}k/s")
         print(f"Elapsed time: {elapsed_seconds:0.1f}s" + '\n')
         f.close()
         return move
@@ -1104,7 +1103,8 @@ class Game:
             if self.get(coord) is not None:
                 self.mod_health(coord, -2)
                 total_damage += 2
-        return (True, "self-destruct at " + str(coords.src) + ' and deals ' + str(total_damage) + ' total damage' + '\n\n')
+        return (
+            True, "self-destruct at " + str(coords.src) + ' and deals ' + str(total_damage) + ' total damage' + '\n\n')
 
     def unit_movement_restriction(self, coords: CoordPair) -> bool:
         src_unit = self.get(coords.src)
@@ -1159,9 +1159,9 @@ def main():
         dim=5,  # int
         max_depth=4,  # int | None
         min_depth=2,  # int | None
-        max_time=5.0,  # float | None
+        max_time=None,  # float | None
         game_type=game_type,  # GameType
-        alpha_beta=True,  # bool
+        alpha_beta=False,  # bool
         max_turns=100,  # int | None
         randomize_moves=True,  # bool
         broker=None  # str | None
@@ -1179,7 +1179,7 @@ def main():
     game = Game(options=options)
     # the main game loop
     file = 'gametrace-' + str(options.alpha_beta) + '-' + str(options.max_time) + '-' + str(options.max_turns) + '.txt'
-    f = open(file, "w") 
+    f = open(file, "w")
     f.write('Game set to ' + str(options.max_turns) + ' turns \n')
     f.write('Game set to ' + str(options.max_time) + ' sec per turn \n')
     f.write(str(options.game_type)[9:] + '\n')
@@ -1213,6 +1213,7 @@ def main():
                 print("Computer doesn't know what to do!!!")
                 exit(1)
 
+
 def process_file(file_name, data):
     try:
         with open(file_name, 'r') as file:
@@ -1220,6 +1221,8 @@ def process_file(file_name, data):
             file.write(data)
     except FileNotFoundError:
         print(f"File '{file_name}' not found.")
+
+
 ##############################################################################################################
 
 if __name__ == '__main__':
