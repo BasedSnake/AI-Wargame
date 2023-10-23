@@ -241,7 +241,7 @@ class Options:
     max_turns: int | None = 100
     randomize_moves: bool = True
     broker: str | None = None
-    file = 'gametrace-' + str(alpha_beta) + '-' + str(max_time) + '-' + str(max_turns) + '.txt'
+
 
 
 ##############################################################################################################
@@ -372,7 +372,7 @@ class Game:
                 return self.perform_suicide(coords)
             return (True, "")
 
-        return (False, "invalid move")
+        return (False, coords)
 
     def next_turn(self):
         """Transitions game to the next turn."""
@@ -417,7 +417,7 @@ class Game:
             return False
         return True
 
-    def read_move(self) -> CoordPair:
+    def read_move(self, file) -> CoordPair:
         """Read a move from keyboard and return as a CoordPair."""
         while True:
             s = input(F'Player {self.next_player.name}, enter your move: ')
@@ -425,12 +425,12 @@ class Game:
             if coords is not None and self.is_valid_coord(coords.src) and self.is_valid_coord(coords.dst):
                 return coords
             else:
-                f = open(Options.file, "a")
-                f.write('Invalid coordinates! Try again.\n')
+                f = open(file, "a")
+                f.write( str(coords.src) + " " + str(coords.dst) + ' are Invalid coordinates! Try again.\n')
                 print('Invalid coordinates! Try again.')
                 f.close()
 
-    def human_turn(self):
+    def human_turn(self, file):
         """Human player plays a move (or get via broker)."""
         if self.options.broker is not None:
             print("Getting next move with auto-retry from game broker...")
@@ -441,18 +441,15 @@ class Game:
                     print(f"Broker {self.next_player.name}: ", end='')
                     print(result)
                     if success:
-                        # f = open(Options.file, "a")
-                        # f.write(result)
-                        # f.close()
                         self.next_turn()
                         break
                 sleep(0.1)
         else:
             while True:
-                mv = self.read_move()
+                mv = self.read_move(file)
                 (success, result) = self.perform_move(mv)
                 if success:
-                    f = open(Options.file, "a")
+                    f = open(file, "a")
                     f.write(result)
                     f.close()
                     print(f"Player {self.next_player.name}: ", end='')
@@ -461,17 +458,19 @@ class Game:
                     break
                 else:
                     print("The move is not valid! Try again.")
-                    f = open(Options.file, "a")
-                    f.write("The move is not valid! Try again.\n")
+                    f = open(file, "a")
+                    f.write("The move " + str(result) + " is not valid! Try again.\n")
                     f.close()
 
-    def computer_turn(self) -> CoordPair | None:
+    def computer_turn(self, file) -> CoordPair | None:
         """Computer plays a move."""
-        mv = self.suggest_move()
+        mv = self.suggest_move(file)
         if mv is not None:
             (success, result) = self.perform_move(mv)
             if success:
-                f = open(Options.file, "a")
+                line = f"Computer {self.next_player.name}: "
+                f = open(file, "a")
+                f.write(line)
                 f.write(result)
                 f.close()
                 print(f"Computer {self.next_player.name}: ", end='')
@@ -859,7 +858,7 @@ class Game:
     def minimax(self, depth, maximizing_player, alpha, beta, start_time, move, action,prev_state):
         if depth == 0 or self.is_finished():
             return self.calculate_heuristic2(move), None, 0  # Also return the best move
-
+        
         if maximizing_player:
             max_eval = MIN_HEURISTIC_SCORE
             best_move = None  # Initialize the best move
@@ -916,21 +915,25 @@ class Game:
         else:
             return (0, None, 0)
 
-    def suggest_move(self) -> CoordPair | None:
+    def suggest_move(self, file) -> CoordPair | None:
         """Suggest the next move using minimax alpha beta. TODO: REPLACE RANDOM_MOVE WITH PROPER GAME LOGIC!!!"""
         start_time = datetime.now()
         game_clone = self.clone()
         if self.next_player == Player.Attacker:
-            (score, move, avg_depth) = game_clone.minimax(2, True, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE, start_time,
+            (score, move, avg_depth) = game_clone.minimax(6, True, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE, start_time,
                                                           None, None,None)
         else:
-            (score, move, avg_depth) = game_clone.minimax(2, False, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE,
+            (score, move, avg_depth) = game_clone.minimax(6, False, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE,
                                                           start_time, None, None,None)
 
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
         self.stats.total_seconds += elapsed_seconds
+        f = open(file, "a")
+        f.write("Heuristic score: " + str(score) + "\n")
+        f.write("Evals per depth: " + "\n")
+        f.write("Eval perf.: " + "\n")
+        f.write("Elapsed time: " + "{:.1f}".format(elapsed_seconds) + "s\n")
         print(f"Heuristic score: {score}")
-        print(f"Average recursive depth: {avg_depth:0.1f}")
         print(f"Evals per depth: ", end='')
         for k in sorted(self.stats.evaluations_per_depth.keys()):
             print(f"{k}:{self.stats.evaluations_per_depth[k]} ", end='')
@@ -939,6 +942,7 @@ class Game:
         if self.stats.total_seconds > 0:
             print(f"Eval perf.: {total_evals / self.stats.total_seconds / 1000:0.1f}k/s")
         print(f"Elapsed time: {elapsed_seconds:0.1f}s")
+        f.close()
         return move
 
     def post_move_to_broker(self, move: CoordPair):
@@ -1010,18 +1014,18 @@ class Game:
         self.mod_health(coords.src, src_damage)
         self.mod_health(coords.dst, dst_damage)
         return (True, 'attack from ' + str(coords.src) + ' to ' + str(coords.dst) + '\n' +
-                'combat damage to source = ' + str(src_damage * -1) + ' , to target = ' + str(dst_damage * -1))
+                'combat damage to source = ' + str(src_damage * -1) + ' , to target = ' + str(dst_damage * -1) + '\n\n')
 
     def perform_repair(self, coords: CoordPair, src_unit: Unit, dst_unit: Unit) -> Tuple[bool, str]:
         repair = src_unit.repair_table[src_unit.type.value][dst_unit.type.value]
         self.mod_health(coords.dst, repair)
         return (True, 'repair from ' + str(coords.src) + ' to ' + str(coords.dst) + '\n' +
-                "repaired " + str(repair) + ' health point')
+                "repaired " + str(repair) + ' health point' + '\n\n')
 
     def perform_movement(self, coords: CoordPair) -> Tuple[bool, str]:
         self.set(coords.dst, self.get(coords.src))
         self.set(coords.src, None)
-        return (True, 'move from ' + str(coords.src) + ' to ' + str(coords.dst))
+        return (True, 'move from ' + str(coords.src) + ' to ' + str(coords.dst) + '\n\n')
 
     def perform_suicide(self, coords: CoordPair) -> Tuple[bool, str]:
         self.mod_health(coords.src, -9)
@@ -1031,7 +1035,7 @@ class Game:
             if self.get(coord) is not None:
                 self.mod_health(coord, -2)
                 total_damage += 2
-        return (True, "self-destruct at " + str(coords.src) + ' and deals ' + str(total_damage) + ' total damage')
+        return (True, "self-destruct at " + str(coords.src) + ' and deals ' + str(total_damage) + ' total damage' + '\n\n')
 
     def unit_movement_restriction(self, coords: CoordPair) -> bool:
         src_unit = self.get(coords.src)
@@ -1086,10 +1090,10 @@ def main():
         dim=5,  # int
         max_depth=4,  # int | None
         min_depth=2,  # int | None
-        max_time=None,  # float | None
+        max_time=5.0,  # float | None
         game_type=game_type,  # GameType
-        alpha_beta=False,  # bool
-        max_turns=200,  # int | None
+        alpha_beta=True,  # bool
+        max_turns=100,  # int | None
         randomize_moves=True,  # bool
         broker=None  # str | None
     )
@@ -1105,8 +1109,8 @@ def main():
     # create a new game
     game = Game(options=options)
     # the main game loop
-
-    f = open(Options.file, "w")
+    file = 'gametrace-' + str(options.alpha_beta) + '-' + str(options.max_time) + '-' + str(options.max_turns) + '.txt'
+    f = open(file, "w") 
     f.write('Game set to ' + str(options.max_turns) + ' turns \n')
     f.write('Game set to ' + str(options.max_time) + ' sec per turn \n')
     f.write(str(options.game_type)[9:] + '\n')
@@ -1115,32 +1119,38 @@ def main():
         print()
         print(game)
 
-        f = open(Options.file, "a")
+        f = open(file, "a")
         f.write(str(game))
         f.close()
         winner = game.has_winner()
         if winner is not None:
             print(f"{winner.name} wins in " + str(game.turns_played) + " turns")
-            f = open(Options.file, "a")
+            f = open(file, "a")
             f.write(f"{winner.name} wins in " + str(game.turns_played) + " turns")
             f.close()
             break
         if game.options.game_type == GameType.AttackerVsDefender:
-            game.human_turn()
+            game.human_turn(file)
         elif game.options.game_type == GameType.AttackerVsComp and game.next_player == Player.Attacker:
-            game.human_turn()
+            game.human_turn(file)
         elif game.options.game_type == GameType.CompVsDefender and game.next_player == Player.Defender:
-            game.human_turn()
+            game.human_turn(file)
         else:
             player = game.next_player
-            move = game.computer_turn()
+            move = game.computer_turn(file)
             if move is not None:
                 game.post_move_to_broker(move)
             else:
                 print("Computer doesn't know what to do!!!")
                 exit(1)
 
-
+def process_file(file_name, data):
+    try:
+        with open(file_name, 'r') as file:
+            # write
+            file.write(data)
+    except FileNotFoundError:
+        print(f"File '{file_name}' not found.")
 ##############################################################################################################
 
 if __name__ == '__main__':
