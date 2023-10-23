@@ -265,6 +265,7 @@ class Game:
     stats: Stats = field(default_factory=Stats)
     _attacker_has_ai: bool = True
     _defender_has_ai: bool = True
+    _cumulative_evals: list = field(default_factory=list)
 
     def __post_init__(self):
         """Automatically called after class init to set up the default board state."""
@@ -512,7 +513,7 @@ class Game:
             move.dst = src
             yield move.clone()
 
-    def calculate_heuristic3(self, move, action,prev_state) -> int:
+    def calculate_heuristic3(self, move, action, prev_state) -> int:
         src_unit = prev_state.get(move.src)
         dst_unit = prev_state.get(move.dst)
         score = 1
@@ -565,7 +566,7 @@ class Game:
                         score = 95
                     elif dst_unit.type == UnitType.Program:
                         score = 97
-                    else:   # AI
+                    else:  # AI
                         score = 100
                 else:
                     if dst_unit.type == UnitType.Virus:
@@ -755,15 +756,13 @@ class Game:
             [-20, -200, -200, -200, -200]
         ]
 
-        
-
         defender_tech = [
             [5, 10, 30, 5, -5],
             [10, 20, 40, 0, -10],
             [30, 40, 10, -10, -20],
             [5, 30, -10, -20, -20],
             [-5, -10, -20, -20, -20]
-]
+        ]
 
         defender_program = [
             [0, 0, 0, 0, 0],
@@ -806,8 +805,10 @@ class Game:
 
         # Calculate the heuristic score based on the provided formula
         heuristic_score = (
-                ((100 + score + healthVP1) * VP1 + (80 + score + healthTP1) * TP1 + (45 + score + healthFP1) * FP1 + (50 + score + healthPP1) * PP1 + (9999 + score + healthAIP1) * AIP1 ) -
-                ((100 + score + healthVP1) * VP2 + (80 + score + healthTP2) * TP2 + (45 + score + healthFP2) * FP2 + (50 + score + healthPP2) * PP2 + (9999 + score + healthAIP2) * AIP2 )
+                ((100 + score + healthVP1) * VP1 + (80 + score + healthTP1) * TP1 + (45 + score + healthFP1) * FP1 + (
+                        50 + score + healthPP1) * PP1 + (9999 + score + healthAIP1) * AIP1) -
+                ((100 + score + healthVP1) * VP2 + (80 + score + healthTP2) * TP2 + (45 + score + healthFP2) * FP2 + (
+                        50 + score + healthPP2) * PP2 + (9999 + score + healthAIP2) * AIP2)
         )
 
         return heuristic_score
@@ -855,11 +856,12 @@ class Game:
 
         return heuristic_score
 
-    def minimax(self, depth, maximizing_player, alpha, beta, start_time, move, action,prev_state):
+    def minimax(self, depth, maximizing_player, alpha, beta, start_time, move, action, prev_state, number_of_states):
         if depth == 0 or self.is_finished():
-            return self.calculate_heuristic2(move), None, 0  # Also return the best move
-        
+            return self.calculate_heuristic2(move), None, 0, number_of_states  # Also return the best move
+
         if maximizing_player:
+            counter = 0
             max_eval = MIN_HEURISTIC_SCORE
             best_move = None  # Initialize the best move
             possible_moves = list(self.move_candidates())
@@ -872,7 +874,10 @@ class Game:
                 action2 = self.determine_action(move)
                 game_clone.perform_move(move)
                 game_clone.next_turn()
-                eval, _, _ = game_clone.minimax(depth - 1, False, alpha, beta, start_time, move, action2,self.clone())
+                if depth == 4:
+                    print("HELLO")
+                eval, _, _, number_of_states = game_clone.minimax(depth - 1, False, alpha, beta, start_time, move,
+                                                                  action2, self.clone(), number_of_states)
                 if eval > max_eval:
                     max_eval = eval
                     best_move = move  # Update the best move
@@ -880,9 +885,13 @@ class Game:
                     alpha = max(alpha, eval)
                     if beta <= alpha:
                         break
-            best_result = (max_eval, best_move, depth)
+                counter += 1
+            number_of_states[depth] = number_of_states[depth] + counter
+            print("COUNTER WITH depth " + str(depth) + " : " + str(counter))
+            best_result = (max_eval, best_move, depth, number_of_states)
             return best_result
         else:
+            counter = 0
             min_eval = MAX_HEURISTIC_SCORE
             best_move = None  # Initialize the best move
             possible_moves = list(self.move_candidates())
@@ -895,7 +904,8 @@ class Game:
                 action2 = self.determine_action(move)
                 game_clone.perform_move(move)
                 game_clone.next_turn()
-                eval, _, _ = game_clone.minimax(depth - 1, True, alpha, beta, start_time, move, action2,self.clone())
+                eval, _, _, number_of_states = game_clone.minimax(depth - 1, True, alpha, beta, start_time, move,
+                                                                  action2, self.clone(), number_of_states)
                 if eval < min_eval:
                     min_eval = eval
                     best_move = move  # Update the best move
@@ -903,8 +913,10 @@ class Game:
                     beta = min(beta, eval)
                     if beta <= alpha:
                         break
-
-            return min_eval, best_move, 0
+                counter += 1
+                print("COUNTER WITH depth " + str(depth) + " : " + str(counter))
+            number_of_states[depth] = number_of_states[depth] + counter
+            return min_eval, best_move, 0, number_of_states
 
     def random_move(self) -> Tuple[int, CoordPair | None, float]:
         """Returns a random move."""
@@ -919,14 +931,54 @@ class Game:
         """Suggest the next move using minimax alpha beta. TODO: REPLACE RANDOM_MOVE WITH PROPER GAME LOGIC!!!"""
         start_time = datetime.now()
         game_clone = self.clone()
+        depth = 4
+        list = [0] * (depth + 1)
+        eval_per_depth = 0
+        number_of_nodes = 0
         if self.next_player == Player.Attacker:
-            (score, move, avg_depth) = game_clone.minimax(6, True, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE, start_time,
-                                                          None, None,None)
+            (score, move, avg_depth, number_of_states) = game_clone.minimax(depth, True, MIN_HEURISTIC_SCORE,
+                                                                            MAX_HEURISTIC_SCORE, start_time,
+                                                                            None, None, None, list)
         else:
-            (score, move, avg_depth) = game_clone.minimax(6, False, MIN_HEURISTIC_SCORE, MAX_HEURISTIC_SCORE,
-                                                          start_time, None, None,None)
+            (score, move, avg_depth, number_of_states) = game_clone.minimax(depth, False, MIN_HEURISTIC_SCORE,
+                                                                            MAX_HEURISTIC_SCORE,
+                                                                            start_time, None, None, None,
+                                                                            list)
+        average_branching_factor = 0
+        parent_nodes_value = 0
+
+        if len(self._cumulative_evals) == 0:
+            self._cumulative_evals = [0] * (depth + 1)
+
+        cumulative_value = 0
+        for i in range(len(number_of_states)):
+            self._cumulative_evals[i] = self._cumulative_evals[i] + number_of_states[i]
+            cumulative_value += self._cumulative_evals[i]
+
+        print("Cumulative eval : " + str(cumulative_value))
+
+        print("Cumulative eval by depth: ", end="")
+        index = depth
+        for i in range(len(number_of_states)):
+            print(str(i + 1) + "=" + str(self._cumulative_evals[index]), end=" ")
+            index -= 1
+        print()
+        print("Cumulative eval by depth (Percentage): ", end="")
+        index = depth
+        for i in range(len(number_of_states)):
+            percentage = (self._cumulative_evals[index] / cumulative_value) * 100
+            print(f"{i + 1}={percentage:.1f}%", end=" ")
+            index -= 1
+
+        for i in range(len(number_of_states) - 1):
+            parent_nodes_value += number_of_states[i]
+
+        print()
+        average_branching_factor = (depth - 1) / parent_nodes_value
+        print(f"Average branching factor: {average_branching_factor:.1f}", end=" ")
 
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
+        # print("TIME : " + str(elapsed_seconds))
         self.stats.total_seconds += elapsed_seconds
         f = open(file, "a")
         f.write("Heuristic score: " + str(score) + "\n")
@@ -934,6 +986,7 @@ class Game:
         f.write("Eval perf.: " + "\n")
         f.write("Elapsed time: " + "{:.1f}".format(elapsed_seconds) + "s\n")
         print(f"Heuristic score: {score}")
+        # print(f"Average recursive depth: {avg_depth:0.1f}")
         print(f"Evals per depth: ", end='')
         for k in sorted(self.stats.evaluations_per_depth.keys()):
             print(f"{k}:{self.stats.evaluations_per_depth[k]} ", end='')
