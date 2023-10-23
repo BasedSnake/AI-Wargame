@@ -858,7 +858,7 @@ class Game:
 
     def minimax(self, depth, maximizing_player, alpha, beta, start_time, move, action, prev_state, number_of_states):
         if depth == 0 or self.is_finished():
-            return self.calculate_heuristic2(move), None, 0, number_of_states  # Also return the best move
+            return self.calculate_heuristic(), None, 0, number_of_states  # Also return the best move
 
         if maximizing_player:
             counter = 0
@@ -927,7 +927,7 @@ class Game:
         """Suggest the next move using minimax alpha beta. TODO: REPLACE RANDOM_MOVE WITH PROPER GAME LOGIC!!!"""
         start_time = datetime.now()
         game_clone = self.clone()
-        depth = 2
+        depth = 4
         list = [0] * depth
         if self.next_player == Player.Attacker:
             (score, move, avg_depth, number_of_states) = game_clone.minimax(depth, True, MIN_HEURISTIC_SCORE,
@@ -971,13 +971,13 @@ class Game:
 
         total = 0
         average_branching_factor = 0
-        if depth > 0:
+        if depth > 1:
             for i in range(len(number_of_states)):
-                if i <= depth - 1:
+                if i <= depth - 2:
                     # total += 1 / (self._cumulative_evals[index] / self._cumulative_evals[index - 1])
-                    total += (number_of_states[i] / number_of_states[i - 1])
+                    total += (number_of_states[i] / number_of_states[i + 1])
 
-            average_branching_factor = total / depth
+            average_branching_factor = total / (depth -1)
         print("Average branching factor: " + str(round(average_branching_factor, 1)))
 
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
@@ -1159,9 +1159,9 @@ def main():
         dim=5,  # int
         max_depth=4,  # int | None
         min_depth=2,  # int | None
-        max_time=None,  # float | None
+        max_time=5.0,  # float | None
         game_type=game_type,  # GameType
-        alpha_beta=False,  # bool
+        alpha_beta=True,  # bool
         max_turns=100,  # int | None
         randomize_moves=True,  # bool
         broker=None  # str | None
