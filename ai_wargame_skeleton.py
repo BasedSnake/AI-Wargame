@@ -975,7 +975,8 @@ class Game:
             for i in range(len(number_of_states)):
                 if i <= depth - 2:
                     # total += 1 / (self._cumulative_evals[index] / self._cumulative_evals[index - 1])
-                    total += (number_of_states[i] / number_of_states[i + 1])
+                    if number_of_states[i] > 0 and number_of_states[i+1] > 0:
+                        total += (number_of_states[i] / number_of_states[i + 1])
 
             average_branching_factor = total / (depth -1)
         print("Average branching factor: " + str(round(average_branching_factor, 1)))
@@ -1159,10 +1160,10 @@ def main():
         dim=5,  # int
         max_depth=4,  # int | None
         min_depth=2,  # int | None
-        max_time=5.0,  # float | None
+        max_time=60.0,  # float | None
         game_type=game_type,  # GameType
         alpha_beta=True,  # bool
-        max_turns=100,  # int | None
+        max_turns=15,  # int | None
         randomize_moves=True,  # bool
         broker=None  # str | None
     )
