@@ -963,7 +963,10 @@ class Game:
         index = depth - 1
         if depth > 0:
             for i in range(len(number_of_states)):
-                percentage = (self._cumulative_evals[index] / cumulative_value) * 100
+                if cumulative_value > 0:
+                    percentage = (self._cumulative_evals[index] / cumulative_value) * 100
+                else:
+                    percentage = 0
                 print(f"{i + 1}={percentage:.1f}%", end=" ")
                 index -= 1
 
@@ -974,11 +977,12 @@ class Game:
         if depth > 1:
             for i in range(len(number_of_states)):
                 if i <= depth - 2:
-                    # total += 1 / (self._cumulative_evals[index] / self._cumulative_evals[index - 1])
-                    if number_of_states[i] > 0 and number_of_states[i+1] > 0:
+                    if number_of_states[i] > 0 and number_of_states[i + 1] > 0:
                         total += (number_of_states[i] / number_of_states[i + 1])
 
-            average_branching_factor = total / (depth -1)
+            if depth > 1:
+                average_branching_factor = total / (depth - 1)
+
         print("Average branching factor: " + str(round(average_branching_factor, 1)))
 
         elapsed_seconds = (datetime.now() - start_time).total_seconds()
@@ -998,7 +1002,10 @@ class Game:
         index = depth - 1
         if depth > 0:
             for i in range(len(number_of_states)):
-                percentage = (self._cumulative_evals[index] / cumulative_value) * 100
+                if cumulative_value > 0:
+                    percentage = (self._cumulative_evals[index] / cumulative_value) * 100
+                else:
+                    percentage = 0
                 f.write(f"{i + 1}={percentage:.1f}% ")
                 index -= 1
         f.write('\n' + "Average branching factor: " + str(round(average_branching_factor, 1)) + '\n')
